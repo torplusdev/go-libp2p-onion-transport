@@ -14,4 +14,8 @@ require (
 	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
 )
 
+replace github.com/multiformats/go-multiaddr => ../go-multiaddr
+
+replace github.com/multiformats/go-multiaddr-net => ../go-multiaddr-net
+
 go 1.12

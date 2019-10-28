@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/libp2p/go-libp2p-peer"
 	"github.com/yawning/bulb/utils/pkcs1"
+	"runtime"
 
 	//"github.com/yawning/bulb"
 	//"github.com/yawning/bulb/utils/pkcs1"
@@ -75,7 +76,7 @@ func IsValidOnionMultiAddr(a ma.Multiaddr) bool {
 // OnionTransport implements go-libp2p-transport's Transport interface
 type OnionTransport struct {
 	torConnection *tor.Tor
-//	controlConn *bulb.Conn
+	//	controlConn *bulb.Conn
 	auth        *proxy.Auth
 	keysDir     string
 	keys        map[string]*rsa.PrivateKey
@@ -87,7 +88,7 @@ type OnionTransport struct {
 	Upgrader *tptu.Upgrader
 }
 
-var _ tpt.Transport = &OnionTransport{}
+//var _ tpt.Transport = &OnionTransport{}
 
 // NewOnionTransport creates a OnionTransport
 //
@@ -102,6 +103,7 @@ var _ tpt.Transport = &OnionTransport{}
 // if onlyOnion is true the dialer will only be used to dial out on onion addresses
 func NewOnionTransport(controlPass string, auth *proxy.Auth, keysDir string, upgrader *tptu.Upgrader, onlyOnion bool) (*OnionTransport, error) {
 
+	//manet.CodecMap.RegisterToNetAddr()
 	conf := tor.StartConf{
 		ExePath: "C:\\Users\\MichaelKanevsky\\Desktop\\Tor Browser\\Browser\\TorBrowser\\Tor\\tor.exe",
 
@@ -111,8 +113,11 @@ func NewOnionTransport(controlPass string, auth *proxy.Auth, keysDir string, upg
 
 	if err != nil {
 		return nil, fmt.Errorf("Unable to start Tor: %v", err)
-
 	}
+
+	runtime.SetFinalizer(torConnection,func(t *tor.Tor) {
+		t.Close()
+	})
 
 	/*conn, err := bulb.Dial(controlNet, controlAddr)
 	if err != nil {
@@ -164,6 +169,19 @@ func (t *OnionTransport) TorDialer(ctx context.Context) (proxy.Dialer, error) {
 	return dialer, nil
 }
 
+func (t*OnionTransport) Close() error {
+
+	if t != nil {
+		err := t.torConnection.Close()
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // loadKeys loads keys into our keys map from files in the keys directory
 func (t *OnionTransport) loadKeys() (map[string]*rsa.PrivateKey, error) {
 	keys := make(map[string]*rsa.PrivateKey)
@@ -205,14 +223,25 @@ func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID
 	if err != nil {
 		return nil, err
 	}
-	netaddr, err := manet.ToNetAddr(raddr)
+
+	//netaddr, err := manet.ToNetAddr(raddr)
+
 	var onionAddress string
+
+	onionAddress, err = raddr.ValueForProtocol(ma.P_ONION3)
+	if err != nil {
+		return nil, err
+	}
+
+	/*
 	if err != nil {
 		onionAddress, err = raddr.ValueForProtocol(ma.P_ONION3)
 		if err != nil {
 			return nil, err
 		}
 	}
+	*/
+
 	onionConn := OnionConn{
 		transport: tpt.Transport(t),
 		laddr:     t.laddr,
@@ -222,7 +251,8 @@ func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID
 		split := strings.Split(onionAddress, ":")
 		onionConn.Conn, err = dialer.Dial("tcp4", split[0]+".onion:"+split[1])
 	} else {
-		onionConn.Conn, err = dialer.Dial(netaddr.Network(), netaddr.String())
+		return nil, fmt.Errorf("onion address required, check comment")
+		//onionConn.Conn, err = dialer.Dial(netaddr.Network(), netaddr.String())
 	}
 	if err != nil {
 		return nil, err
@@ -251,10 +281,15 @@ func (t *OnionTransport) Listen(laddr ma.Multiaddr) (tpt.Listener, error) {
 		return nil, fmt.Errorf("failed to convert onion service port to int")
 	}
 
+	var onionKey *rsa.PrivateKey = nil
+
+	/*
 	onionKey, ok := t.keys[addr[0]]
 	if !ok {
 		return nil, fmt.Errorf("missing onion service key material for %s", addr[0])
 	}
+	*/
+
 
 	listener := OnionListener{
 		port:      uint16(port),
@@ -268,6 +303,8 @@ func (t *OnionTransport) Listen(laddr ma.Multiaddr) (tpt.Listener, error) {
 	onion, err := t.torConnection.Listen(listenCtx, &tor.ListenConf{Version3: true, RemotePorts: []int{port}})
 	var _ = onion.ID
 
+	listener.listener = onion.LocalListener
+
 	/*// setup bulb listener
 	_, err = pkcs1.OnionAddr(&onionKey.PublicKey)
 	if err != nil {
@@ -278,7 +315,7 @@ func (t *OnionTransport) Listen(laddr ma.Multiaddr) (tpt.Listener, error) {
 		return nil, err
 	}
 
-	 */
+	*/
 	t.laddr = laddr
 
 	return &listener, nil
