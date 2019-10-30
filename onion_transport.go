@@ -77,11 +77,11 @@ func IsValidOnionMultiAddr(a ma.Multiaddr) bool {
 type OnionTransport struct {
 	torConnection *tor.Tor
 	//	controlConn *bulb.Conn
-	auth        *proxy.Auth
-	keysDir     string
-	keys        map[string]*rsa.PrivateKey
-	onlyOnion   bool
-	laddr       ma.Multiaddr
+	auth      *proxy.Auth
+	keysDir   string
+	keys      map[string]*rsa.PrivateKey
+	onlyOnion bool
+	laddr     ma.Multiaddr
 
 	// Connection upgrader for upgrading insecure stream connections to
 	// secure multiplex connections.
@@ -105,8 +105,7 @@ func NewOnionTransport(controlPass string, auth *proxy.Auth, keysDir string, upg
 
 	//manet.CodecMap.RegisterToNetAddr()
 	conf := tor.StartConf{
-		ExePath: "C:\\Users\\MichaelKanevsky\\Desktop\\Tor Browser\\Browser\\TorBrowser\\Tor\\tor.exe",
-
+		ExePath: "/opt/tor-browser_en-US/Browser/TorBrowser/Tor/tor",
 	}
 
 	torConnection, err := tor.Start(nil, &conf)
@@ -115,7 +114,7 @@ func NewOnionTransport(controlPass string, auth *proxy.Auth, keysDir string, upg
 		return nil, fmt.Errorf("Unable to start Tor: %v", err)
 	}
 
-	runtime.SetFinalizer(torConnection,func(t *tor.Tor) {
+	runtime.SetFinalizer(torConnection, func(t *tor.Tor) {
 		t.Close()
 	})
 
@@ -128,13 +127,12 @@ func NewOnionTransport(controlPass string, auth *proxy.Auth, keysDir string, upg
 	}
 	*/
 
-
 	o := OnionTransport{
 		torConnection: torConnection,
-		auth:        auth,
-		keysDir:     keysDir,
-		onlyOnion:   onlyOnion,
-		Upgrader:    upgrader,
+		auth:          auth,
+		keysDir:       keysDir,
+		onlyOnion:     onlyOnion,
+		Upgrader:      upgrader,
 	}
 	keys, err := o.loadKeys()
 	if err != nil {
@@ -150,9 +148,9 @@ type OnionTransportC func(*tptu.Upgrader) (tpt.Transport, error)
 
 // NewOnionTransportC is a convenience function that returns a function
 // suitable for passing into libp2p.Transport for host configuration
-func NewOnionTransportC( controlPass string, auth *proxy.Auth, keysDir string, onlyOnion bool) OnionTransportC {
+func NewOnionTransportC(controlPass string, auth *proxy.Auth, keysDir string, onlyOnion bool) OnionTransportC {
 	return func(upgrader *tptu.Upgrader) (tpt.Transport, error) {
-		return NewOnionTransport( controlPass, auth, keysDir, upgrader, onlyOnion)
+		return NewOnionTransport(controlPass, auth, keysDir, upgrader, onlyOnion)
 	}
 }
 
@@ -161,7 +159,7 @@ func NewOnionTransportC( controlPass string, auth *proxy.Auth, keysDir string, o
 // easy access to Tor for other functions.
 func (t *OnionTransport) TorDialer(ctx context.Context) (proxy.Dialer, error) {
 
-	dialer, err := t.torConnection.Dialer(ctx,nil)
+	dialer, err := t.torConnection.Dialer(ctx, nil)
 	//dialer, err := t.controlConn.Dialer(ctx,nil)
 	if err != nil {
 		return nil, err
@@ -169,7 +167,7 @@ func (t *OnionTransport) TorDialer(ctx context.Context) (proxy.Dialer, error) {
 	return dialer, nil
 }
 
-func (t*OnionTransport) Close() error {
+func (t *OnionTransport) Close() error {
 
 	if t != nil {
 		err := t.torConnection.Close()
@@ -218,7 +216,7 @@ func (t *OnionTransport) loadKeys() (map[string]*rsa.PrivateKey, error) {
 // Dial dials a remote peer. It should try to reuse local listener
 // addresses if possible but it may choose not to.
 func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID) (tpt.Conn, error) {
-	dialer, err := t.torConnection.Dialer(ctx,nil)
+	dialer, err := t.torConnection.Dialer(ctx, nil)
 
 	if err != nil {
 		return nil, err
@@ -234,12 +232,12 @@ func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID
 	}
 
 	/*
-	if err != nil {
-		onionAddress, err = raddr.ValueForProtocol(ma.P_ONION3)
 		if err != nil {
-			return nil, err
+			onionAddress, err = raddr.ValueForProtocol(ma.P_ONION3)
+			if err != nil {
+				return nil, err
+			}
 		}
-	}
 	*/
 
 	onionConn := OnionConn{
@@ -284,12 +282,11 @@ func (t *OnionTransport) Listen(laddr ma.Multiaddr) (tpt.Listener, error) {
 	var onionKey *rsa.PrivateKey = nil
 
 	/*
-	onionKey, ok := t.keys[addr[0]]
-	if !ok {
-		return nil, fmt.Errorf("missing onion service key material for %s", addr[0])
-	}
+		onionKey, ok := t.keys[addr[0]]
+		if !ok {
+			return nil, fmt.Errorf("missing onion service key material for %s", addr[0])
+		}
 	*/
-
 
 	listener := OnionListener{
 		port:      uint16(port),
@@ -341,7 +338,7 @@ func (t *OnionTransport) Protocols() []int {
 	if !t.onlyOnion {
 		return []int{ma.P_ONION, ma.P_ONION3, ma.P_TCP}
 	} else {
-		return []int{ma.P_ONION,ma.P_ONION3}
+		return []int{ma.P_ONION, ma.P_ONION3}
 	}
 }
 
