@@ -106,6 +106,7 @@ func NewOnionTransport(controlPass string, auth *proxy.Auth, keysDir string, upg
 	//manet.CodecMap.RegisterToNetAddr()
 	conf := tor.StartConf{
 		ExePath: "/opt/tor-browser_en-US/Browser/TorBrowser/Tor/tor",
+		TorrcFile: "/opt/tor-browser_en-US/Browser/TorBrowser/Data/Tor/torrc",
 	}
 
 	torConnection, err := tor.Start(nil, &conf)
