@@ -6,6 +6,7 @@ import (
 	"encoding/base32"
 	"encoding/pem"
 	"fmt"
+	"bufio"
 	"github.com/libp2p/go-libp2p-peer"
 	"github.com/yawning/bulb/utils/pkcs1"
 	"runtime"
@@ -37,7 +38,7 @@ func IsValidOnionMultiAddr(a ma.Multiaddr) bool {
 	}
 
 	// check for correct network type
-	if a.Protocols()[0].Name != "onion3" {
+	if (a.Protocols()[0].Name != "onion3") &&  (a.Protocols()[0].Name != "onion") {
 		return false
 	}
 
@@ -103,13 +104,19 @@ type OnionTransport struct {
 // if onlyOnion is true the dialer will only be used to dial out on onion addresses
 func NewOnionTransport(controlPass string, auth *proxy.Auth, keysDir string, upgrader *tptu.Upgrader, onlyOnion bool) (*OnionTransport, error) {
 
+	//TODO: Handle defer close
+	logwriter := bufio.NewWriter(os.Stdout)
 	//manet.CodecMap.RegisterToNetAddr()
 	conf := tor.StartConf{
 		ExePath: "/opt/tor-browser_en-US/Browser/TorBrowser/Tor/tor",
 		TorrcFile: "/opt/tor-browser_en-US/Browser/TorBrowser/Data/Tor/torrc",
+		DebugWriter: logwriter,
+		NoHush:true,
 	}
 
 	torConnection, err := tor.Start(nil, &conf)
+	torConnection.StopProcessOnClose = true
+
 
 	if err != nil {
 		return nil, fmt.Errorf("Unable to start Tor: %v", err)
@@ -228,8 +235,13 @@ func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID
 	var onionAddress string
 
 	onionAddress, err = raddr.ValueForProtocol(ma.P_ONION3)
+
 	if err != nil {
-		return nil, err
+		onionAddress, err = raddr.ValueForProtocol(ma.P_ONION)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	/*
@@ -262,10 +274,18 @@ func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID
 // Listen listens on the passed multiaddr.
 func (t *OnionTransport) Listen(laddr ma.Multiaddr) (tpt.Listener, error) {
 
+	var netaddr string;
+	var err error;
+
 	// convert to net.Addr
-	netaddr, err := laddr.ValueForProtocol(ma.P_ONION3)
+	netaddr, err = laddr.ValueForProtocol(ma.P_ONION3)
+
 	if err != nil {
-		return nil, err
+		netaddr, err = laddr.ValueForProtocol(ma.P_ONION)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// retreive onion service virtport
