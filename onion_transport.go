@@ -102,14 +102,15 @@ type OnionTransport struct {
 // keysDir is the key material for the Tor onion service.
 //
 // if onlyOnion is true the dialer will only be used to dial out on onion addresses
-func NewOnionTransport(controlPass string, auth *proxy.Auth, keysDir string, upgrader *tptu.Upgrader, onlyOnion bool) (*OnionTransport, error) {
+func NewOnionTransport(torExecutablePath string, torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, upgrader *tptu.Upgrader, onlyOnion bool) (*OnionTransport, error) {
 
 	//TODO: Handle defer close
 	logwriter := bufio.NewWriter(os.Stdout)
 	//manet.CodecMap.RegisterToNetAddr()
 	conf := tor.StartConf{
-		ExePath: "/opt/tor-browser_en-US/Browser/TorBrowser/Tor/tor",
-		TorrcFile: "/opt/tor-browser_en-US/Browser/TorBrowser/Data/Tor/torrc",
+		ExePath: torExecutablePath,
+		//"/opt/tor-browser_en-US/Browser/TorBrowser/Data/Tor/torrc"
+		TorrcFile:  torConfigPath,
 		DebugWriter: logwriter,
 		NoHush:true,
 	}
@@ -156,9 +157,9 @@ type OnionTransportC func(*tptu.Upgrader) (tpt.Transport, error)
 
 // NewOnionTransportC is a convenience function that returns a function
 // suitable for passing into libp2p.Transport for host configuration
-func NewOnionTransportC(controlPass string, auth *proxy.Auth, keysDir string, onlyOnion bool) OnionTransportC {
+func NewOnionTransportC(torExecutablePath string,torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, onlyOnion bool) OnionTransportC {
 	return func(upgrader *tptu.Upgrader) (tpt.Transport, error) {
-		return NewOnionTransport(controlPass, auth, keysDir, upgrader, onlyOnion)
+		return NewOnionTransport(torExecutablePath, torConfigPath ,controlPass, auth, keysDir, upgrader, onlyOnion)
 	}
 }
 
