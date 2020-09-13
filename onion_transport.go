@@ -89,7 +89,7 @@ type OnionTransport struct {
 	Upgrader *tptu.Upgrader
 }
 
-//var _ tpt.Transport = &OnionTransport{}
+var transportInstance *OnionTransport = nil
 
 // NewOnionTransport creates a OnionTransport
 //
@@ -104,13 +104,19 @@ type OnionTransport struct {
 // if onlyOnion is true the dialer will only be used to dial out on onion addresses
 func NewOnionTransport(torExecutablePath string, torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, upgrader *tptu.Upgrader, onlyOnion bool) (*OnionTransport, error) {
 
+	if (transportInstance != nil) {
+		return transportInstance,nil
+	}
+
 	//TODO: Handle defer close
 	logwriter := bufio.NewWriter(os.Stdout)
 	//manet.CodecMap.RegisterToNetAddr()
 	conf := tor.StartConf{
 		ExePath: torExecutablePath,
+		DataDir: "./.tor",
 		//"/opt/tor-browser_en-US/Browser/TorBrowser/Data/Tor/torrc"
 		TorrcFile:  torConfigPath,
+		DisableCookieAuth: true,
 		DebugWriter: logwriter,
 		NoHush:true,
 	}
@@ -148,6 +154,10 @@ func NewOnionTransport(torExecutablePath string, torConfigPath string, controlPa
 		return nil, err
 	}
 	o.keys = keys
+
+	// Save the instance for future use
+	transportInstance = &o
+
 	return &o, nil
 }
 
