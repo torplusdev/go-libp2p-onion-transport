@@ -116,7 +116,8 @@ func NewOnionTransport(torExecutablePath string, torConfigPath string, controlPa
 		DataDir: "./.tor",
 		//"/opt/tor-browser_en-US/Browser/TorBrowser/Data/Tor/torrc"
 		TorrcFile:  torConfigPath,
-		DisableCookieAuth: true,
+		ControlPort: 9051,
+		DisableCookieAuth: false,
 		DebugWriter: logwriter,
 		NoHush:true,
 	}
