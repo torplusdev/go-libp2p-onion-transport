@@ -116,7 +116,9 @@ func NewOnionTransport(torExecutablePath string, torConfigPath string, controlPa
 		DataDir: "./.tor",
 		//"/opt/tor-browser_en-US/Browser/TorBrowser/Data/Tor/torrc"
 		TorrcFile:  torConfigPath,
+
 		ControlPort: 9051,
+		NoAutoSocksPort: true,
 		DisableCookieAuth: false,
 		DebugWriter: logwriter,
 		NoHush:true,
@@ -179,7 +181,11 @@ func NewOnionTransportC(torExecutablePath string,torConfigPath string, controlPa
 // easy access to Tor for other functions.
 func (t *OnionTransport) TorDialer(ctx context.Context) (proxy.Dialer, error) {
 
-	dialer, err := t.torConnection.Dialer(ctx, nil)
+	conf := tor.DialConf{
+		ProxyAddress: "127.0.0.1:9050",
+	}
+
+	dialer, err := t.torConnection.Dialer(ctx, &conf)
 	//dialer, err := t.controlConn.Dialer(ctx,nil)
 	if err != nil {
 		return nil, err
@@ -236,7 +242,13 @@ func (t *OnionTransport) loadKeys() (map[string]*rsa.PrivateKey, error) {
 // Dial dials a remote peer. It should try to reuse local listener
 // addresses if possible but it may choose not to.
 func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID) (tpt.Conn, error) {
-	dialer, err := t.torConnection.Dialer(ctx, nil)
+
+
+	conf := tor.DialConf{
+		ProxyAddress: "127.0.0.1:9050",
+	}
+
+	dialer, err := t.torConnection.Dialer(ctx, &conf)
 
 	if err != nil {
 		return nil, err
