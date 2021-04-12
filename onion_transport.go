@@ -342,7 +342,17 @@ func (t *OnionTransport) Listen(laddr ma.Multiaddr) (tpt.Listener, error) {
 	}
 
 	listenCtx, _ := context.WithTimeout(context.Background(), 3*time.Minute)
+
+	if t.torConnection == nil {
+		return nil, fmt.Errorf("Cannot listen on connection, torConnection is nil. (" + string(port) + ")")
+	}
+
 	onion, err := t.torConnection.Listen(listenCtx, &tor.ListenConf{Version3: true, RemotePorts: []int{port}})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error listening on torConnection port %d: %s", port, err.Error())
+	}
+
 	var _ = onion.ID
 
 	listener.listener = onion.LocalListener
