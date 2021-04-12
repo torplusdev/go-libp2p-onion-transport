@@ -18,7 +18,7 @@ func TestCanConnectToOnionService(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	onion, err := NewOnionTransport("",nil,"",nil,true)
+	onion, err := NewOnionTransport("","","",nil,true, nil, true, true)
 
 	if err != nil {
 		t.Fatal(err)

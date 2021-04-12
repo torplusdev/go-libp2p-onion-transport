@@ -83,6 +83,7 @@ type OnionTransport struct {
 	keys      map[string]*rsa.PrivateKey
 	onlyOnion bool
 	laddr     ma.Multiaddr
+	nonAnonymous bool
 
 	// Connection upgrader for upgrading insecure stream connections to
 	// secure multiplex connections.
@@ -102,7 +103,7 @@ var transportInstance *OnionTransport = nil
 // keysDir is the key material for the Tor onion service.
 //
 // if onlyOnion is true the dialer will only be used to dial out on onion addresses
-func NewOnionTransport(torExecutablePath string, torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, upgrader *tptu.Upgrader, onlyOnion bool) (*OnionTransport, error) {
+func NewOnionTransport(torExecutablePath string, torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, upgrader *tptu.Upgrader, onlyOnion bool, supportNonAnonymousMode bool) (*OnionTransport, error) {
 
 	if (transportInstance != nil) {
 		return transportInstance,nil
@@ -122,6 +123,7 @@ func NewOnionTransport(torExecutablePath string, torConfigPath string, controlPa
 		DisableCookieAuth: false,
 		DebugWriter: logwriter,
 		NoHush:true,
+
 	}
 
 	torConnection, err := tor.Start(nil, &conf)
@@ -151,6 +153,7 @@ func NewOnionTransport(torExecutablePath string, torConfigPath string, controlPa
 		keysDir:       keysDir,
 		onlyOnion:     onlyOnion,
 		Upgrader:      upgrader,
+		nonAnonymous: supportNonAnonymousMode,
 	}
 	keys, err := o.loadKeys()
 	if err != nil {
@@ -170,9 +173,9 @@ type OnionTransportC func(*tptu.Upgrader) (tpt.Transport, error)
 
 // NewOnionTransportC is a convenience function that returns a function
 // suitable for passing into libp2p.Transport for host configuration
-func NewOnionTransportC(torExecutablePath string,torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, onlyOnion bool) OnionTransportC {
+func NewOnionTransportC(torExecutablePath string,torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, onlyOnion bool, supportNonAnonymourMode bool) OnionTransportC {
 	return func(upgrader *tptu.Upgrader) (tpt.Transport, error) {
-		return NewOnionTransport(torExecutablePath, torConfigPath ,controlPass, auth, keysDir, upgrader, onlyOnion)
+		return NewOnionTransport(torExecutablePath, torConfigPath ,controlPass, auth, keysDir, upgrader, onlyOnion, supportNonAnonymourMode)
 	}
 }
 
@@ -347,7 +350,7 @@ func (t *OnionTransport) Listen(laddr ma.Multiaddr) (tpt.Listener, error) {
 		return nil, fmt.Errorf("Cannot listen on connection, torConnection is nil. (" + string(port) + ")")
 	}
 
-	onion, err := t.torConnection.Listen(listenCtx, &tor.ListenConf{Version3: true, RemotePorts: []int{port}})
+	onion, err := t.torConnection.Listen(listenCtx, &tor.ListenConf{Version3: true, NonAnonymous: t.nonAnonymous, RemotePorts: []int{port}})
 
 	if err != nil {
 		return nil, fmt.Errorf("Error listening on torConnection port %d: %s", port, err.Error())
