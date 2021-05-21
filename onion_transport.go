@@ -1,19 +1,19 @@
 package oniontransport
 
 import (
+	"bufio"
 	"context"
 	"crypto/rsa"
 	"encoding/base32"
 	"encoding/pem"
 	"fmt"
-	"bufio"
-	"github.com/libp2p/go-libp2p-peer"
-	"github.com/yawning/bulb/utils/pkcs1"
+	"path"
 	"runtime"
+
+	"github.com/yawning/bulb/utils/pkcs1"
 
 	//"github.com/yawning/bulb"
 	//"github.com/yawning/bulb/utils/pkcs1"
-	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"net"
 	"os"
@@ -22,12 +22,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cretz/bine/tor"
+	"golang.org/x/net/proxy"
+
+	"github.com/libp2p/go-libp2p-core/peer"
 	tpt "github.com/libp2p/go-libp2p-transport"
 	tptu "github.com/libp2p/go-libp2p-transport-upgrader"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/multiformats/go-multiaddr-net"
+	manet "github.com/multiformats/go-multiaddr-net"
 	"github.com/whyrusleeping/mafmt"
+	"paidpiper.com/go-libp2p-onion-transport/tor"
 )
 
 // IsValidOnionMultiAddr is used to validate that a multiaddr
@@ -38,7 +41,7 @@ func IsValidOnionMultiAddr(a ma.Multiaddr) bool {
 	}
 
 	// check for correct network type
-	if (a.Protocols()[0].Name != "onion3") &&  (a.Protocols()[0].Name != "onion") {
+	if (a.Protocols()[0].Name != "onion3") && (a.Protocols()[0].Name != "onion") {
 		return false
 	}
 
@@ -78,11 +81,11 @@ func IsValidOnionMultiAddr(a ma.Multiaddr) bool {
 type OnionTransport struct {
 	torConnection *tor.Tor
 	//	controlConn *bulb.Conn
-	auth      *proxy.Auth
-	keysDir   string
-	keys      map[string]*rsa.PrivateKey
-	onlyOnion bool
-	laddr     ma.Multiaddr
+	auth         *proxy.Auth
+	keysDir      string
+	keys         map[string]*rsa.PrivateKey
+	onlyOnion    bool
+	laddr        ma.Multiaddr
 	nonAnonymous bool
 
 	// Connection upgrader for upgrading insecure stream connections to
@@ -103,37 +106,40 @@ var transportInstance *OnionTransport = nil
 // keysDir is the key material for the Tor onion service.
 //
 // if onlyOnion is true the dialer will only be used to dial out on onion addresses
-func NewOnionTransport(torExecutablePath string, torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, upgrader *tptu.Upgrader, onlyOnion bool, supportNonAnonymousMode bool) (*OnionTransport, error) {
+func NewOnionTransport(torExecutablePath string, torDataDir string, torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, upgrader *tptu.Upgrader, onlyOnion bool, supportNonAnonymousMode bool) (*OnionTransport, error) {
 
-	if (transportInstance != nil) {
-		return transportInstance,nil
+	if transportInstance != nil {
+		return transportInstance, nil
 	}
 
 	//TODO: Handle defer close
 	logwriter := bufio.NewWriter(os.Stdout)
 	//manet.CodecMap.RegisterToNetAddr()
+	if torDataDir == "" {
+		dirname, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		torDataDir = path.Join(dirname, ".tor")
+	}
 	conf := tor.StartConf{
-		ExePath: torExecutablePath,
-		DataDir: "./.tor",
-		//"/opt/tor-browser_en-US/Browser/TorBrowser/Data/Tor/torrc"
-		TorrcFile:  torConfigPath,
-
-		ControlPort: 9051,
-		NoAutoSocksPort: true,
+		CreateProcess:     false,
+		ExePath:           torExecutablePath,
+		DataDir:           torDataDir,
+		TorrcFile:         torConfigPath,
+		ControlPort:       9051,
+		NoAutoSocksPort:   true,
 		DisableCookieAuth: false,
-		DebugWriter: logwriter,
-		NoHush:true,
-
+		DebugWriter:       logwriter,
+		NoHush:            true,
 	}
 
 	torConnection, err := tor.Start(nil, &conf)
-	torConnection.StopProcessOnClose = true
-
 
 	if err != nil {
-		return nil, fmt.Errorf("Unable to start Tor: %v", err)
+		return nil, fmt.Errorf("unable to start Tor: %v", err)
 	}
-
+	torConnection.StopProcessOnClose = true
 	runtime.SetFinalizer(torConnection, func(t *tor.Tor) {
 		t.Close()
 	})
@@ -146,14 +152,14 @@ func NewOnionTransport(torExecutablePath string, torConfigPath string, controlPa
 		return nil, fmt.Errorf("authentication failed: %v", err)
 	}
 	*/
-
+	//fmt.Println("NewOnionTransport")
 	o := OnionTransport{
 		torConnection: torConnection,
 		auth:          auth,
 		keysDir:       keysDir,
 		onlyOnion:     onlyOnion,
 		Upgrader:      upgrader,
-		nonAnonymous: supportNonAnonymousMode,
+		nonAnonymous:  supportNonAnonymousMode,
 	}
 	keys, err := o.loadKeys()
 	if err != nil {
@@ -173,9 +179,9 @@ type OnionTransportC func(*tptu.Upgrader) (tpt.Transport, error)
 
 // NewOnionTransportC is a convenience function that returns a function
 // suitable for passing into libp2p.Transport for host configuration
-func NewOnionTransportC(torExecutablePath string,torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, onlyOnion bool, supportNonAnonymourMode bool) OnionTransportC {
+func NewOnionTransportC(torExecutablePath string, torDataDir string, torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, onlyOnion bool, supportNonAnonymourMode bool) OnionTransportC {
 	return func(upgrader *tptu.Upgrader) (tpt.Transport, error) {
-		return NewOnionTransport(torExecutablePath, torConfigPath ,controlPass, auth, keysDir, upgrader, onlyOnion, supportNonAnonymourMode)
+		return NewOnionTransport(torExecutablePath, torDataDir, torConfigPath, controlPass, auth, keysDir, upgrader, onlyOnion, supportNonAnonymourMode)
 	}
 }
 
@@ -245,8 +251,7 @@ func (t *OnionTransport) loadKeys() (map[string]*rsa.PrivateKey, error) {
 // Dial dials a remote peer. It should try to reuse local listener
 // addresses if possible but it may choose not to.
 func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID) (tpt.Conn, error) {
-
-
+	fmt.Println("Call Dial", raddr.String())
 	conf := tor.DialConf{
 		ProxyAddress: "127.0.0.1:9050",
 	}
@@ -301,8 +306,8 @@ func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID
 // Listen listens on the passed multiaddr.
 func (t *OnionTransport) Listen(laddr ma.Multiaddr) (tpt.Listener, error) {
 
-	var netaddr string;
-	var err error;
+	var netaddr string
+	var err error
 
 	// convert to net.Addr
 	netaddr, err = laddr.ValueForProtocol(ma.P_ONION3)

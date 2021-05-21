@@ -4,11 +4,12 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/pem"
-	ma "github.com/multiformats/go-multiaddr"
-	"github.com/yawning/bulb/utils/pkcs1"
 	"os"
 	"path"
 	"testing"
+
+	ma "github.com/multiformats/go-multiaddr"
+	"github.com/yawning/bulb/utils/pkcs1"
 )
 
 var key string
@@ -100,14 +101,13 @@ func createHiddenServiceKey() (string, error) {
 }
 
 func Test_testTorConnectivity(t *testing.T) {
-
-	onion, err := NewOnionTransport("",nil,"",nil,true)
+	onion, err := NewOnionTransport("", "", "", "", nil, "", nil, true, true)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ma,err := ma.NewMultiaddr("/ip4/0.0.0.0/tcp/8090")
+	ma, err := ma.NewMultiaddr("/ip4/0.0.0.0/tcp/8090")
 
 	if err != nil {
 		t.Fatal(err)
