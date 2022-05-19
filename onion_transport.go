@@ -33,6 +33,10 @@ import (
 	"paidpiper.com/go-libp2p-onion-transport/tor"
 )
 
+const (
+	PROXY_ADDR = "127.0.0.1:29050"
+)
+
 // IsValidOnionMultiAddr is used to validate that a multiaddr
 // is representing a Tor onion service
 func IsValidOnionMultiAddr(a ma.Multiaddr) bool {
@@ -191,7 +195,7 @@ func NewOnionTransportC(torExecutablePath string, torDataDir string, torConfigPa
 func (t *OnionTransport) TorDialer(ctx context.Context) (proxy.Dialer, error) {
 
 	conf := tor.DialConf{
-		ProxyAddress: "127.0.0.1:9050",
+		ProxyAddress: PROXY_ADDR,
 	}
 
 	dialer, err := t.torConnection.Dialer(ctx, &conf)
@@ -253,7 +257,7 @@ func (t *OnionTransport) loadKeys() (map[string]*rsa.PrivateKey, error) {
 func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID) (tpt.Conn, error) {
 	fmt.Println("Call Dial", raddr.String())
 	conf := tor.DialConf{
-		ProxyAddress: "127.0.0.1:9050",
+		ProxyAddress: PROXY_ADDR,
 	}
 
 	dialer, err := t.torConnection.Dialer(ctx, &conf)
