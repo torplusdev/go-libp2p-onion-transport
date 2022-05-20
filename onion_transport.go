@@ -131,7 +131,7 @@ func NewOnionTransport(torExecutablePath string, torDataDir string, torConfigPat
 		ExePath:           torExecutablePath,
 		DataDir:           torDataDir,
 		TorrcFile:         torConfigPath,
-		ControlPort:       9051,
+		ControlPort:       29051,
 		NoAutoSocksPort:   true,
 		DisableCookieAuth: false,
 		DebugWriter:       logwriter,
