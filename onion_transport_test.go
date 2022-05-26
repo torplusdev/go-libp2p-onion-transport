@@ -101,7 +101,8 @@ func createHiddenServiceKey() (string, error) {
 }
 
 func Test_testTorConnectivity(t *testing.T) {
-	onion, err := NewOnionTransport("", "", "", "", nil, "", nil, true, true)
+	torConfig := "/usr/local/etc/tor/torrc"
+	onion, err := NewOnionTransport("", "", torConfig, "", nil, "", nil, true, true)
 
 	if err != nil {
 		t.Fatal(err)

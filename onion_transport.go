@@ -33,10 +33,6 @@ import (
 	"paidpiper.com/go-libp2p-onion-transport/tor"
 )
 
-const (
-	PROXY_ADDR = "127.0.0.1:29050"
-)
-
 // IsValidOnionMultiAddr is used to validate that a multiaddr
 // is representing a Tor onion service
 func IsValidOnionMultiAddr(a ma.Multiaddr) bool {
@@ -83,7 +79,10 @@ func IsValidOnionMultiAddr(a ma.Multiaddr) bool {
 
 // OnionTransport implements go-libp2p-transport's Transport interface
 type OnionTransport struct {
+	ctx           context.Context
+	proxyAddress  string
 	torConnection *tor.Tor
+	startConf     *tor.StartConf
 	//	controlConn *bulb.Conn
 	auth         *proxy.Auth
 	keysDir      string
@@ -126,55 +125,47 @@ func NewOnionTransport(torExecutablePath string, torDataDir string, torConfigPat
 		}
 		torDataDir = path.Join(dirname, ".tor")
 	}
-	conf := tor.StartConf{
+	sp, cp, err := tor.ReadTorConfigsLines(torConfigPath)
+	if err != nil {
+		return nil, err
+	}
+	conf := &tor.StartConf{
+
 		CreateProcess:     false,
 		ExePath:           torExecutablePath,
 		DataDir:           torDataDir,
 		TorrcFile:         torConfigPath,
-		ControlPort:       29051,
+		ControlPort:       cp,
 		NoAutoSocksPort:   true,
 		DisableCookieAuth: false,
 		DebugWriter:       logwriter,
 		NoHush:            true,
 	}
 
-	torConnection, err := tor.Start(nil, &conf)
-
-	if err != nil {
-		return nil, fmt.Errorf("unable to start Tor: %v", err)
-	}
-	torConnection.StopProcessOnClose = true
-	runtime.SetFinalizer(torConnection, func(t *tor.Tor) {
-		t.Close()
-	})
-
-	/*conn, err := bulb.Dial(controlNet, controlAddr)
-	if err != nil {
-		return nil, err
-	}
-	if err := conn.Authenticate(controlPass); err != nil {
-		return nil, fmt.Errorf("authentication failed: %v", err)
-	}
-	*/
 	//fmt.Println("NewOnionTransport")
-	o := OnionTransport{
-		torConnection: torConnection,
-		auth:          auth,
-		keysDir:       keysDir,
-		onlyOnion:     onlyOnion,
-		Upgrader:      upgrader,
-		nonAnonymous:  supportNonAnonymousMode,
+	o := &OnionTransport{
+		ctx:          context.Background(),
+		proxyAddress: fmt.Sprintf("127.0.0.1:%v", sp),
+		startConf:    conf,
+		auth:         auth,
+		keysDir:      keysDir,
+		onlyOnion:    onlyOnion,
+		Upgrader:     upgrader,
+		nonAnonymous: supportNonAnonymousMode,
 	}
 	keys, err := o.loadKeys()
 	if err != nil {
 		return nil, err
 	}
 	o.keys = keys
-
+	err = o.createTorConnection()
+	if err != nil {
+		return nil, err
+	}
 	// Save the instance for future use
-	transportInstance = &o
+	transportInstance = o
 
-	return &o, nil
+	return o, nil
 }
 
 // OnionTransportC is a type alias for OnionTransport constructors, for use
@@ -189,13 +180,37 @@ func NewOnionTransportC(torExecutablePath string, torDataDir string, torConfigPa
 	}
 }
 
+func (t *OnionTransport) createTorConnection() error {
+
+	torConnection, err := tor.Start(t.ctx, t.startConf)
+
+	if err != nil {
+		return fmt.Errorf("unable to start Tor: %v", err)
+	}
+	torConnection.StopProcessOnClose = false
+	runtime.SetFinalizer(torConnection, func(t *tor.Tor) {
+		t.Close()
+	})
+
+	/*conn, err := bulb.Dial(controlNet, controlAddr)
+	if err != nil {
+		return nil, err
+	}
+	if err := conn.Authenticate(controlPass); err != nil {
+		return nil, fmt.Errorf("authentication failed: %v", err)
+	}
+	*/
+	t.torConnection = torConnection
+	return nil
+}
+
 // Returns a proxy dialer gathered from the control interface.
 // This isn't needed for the IPFS transport but it provides
 // easy access to Tor for other functions.
 func (t *OnionTransport) TorDialer(ctx context.Context) (proxy.Dialer, error) {
 
 	conf := tor.DialConf{
-		ProxyAddress: PROXY_ADDR,
+		ProxyAddress: t.proxyAddress,
 	}
 
 	dialer, err := t.torConnection.Dialer(ctx, &conf)
@@ -257,7 +272,7 @@ func (t *OnionTransport) loadKeys() (map[string]*rsa.PrivateKey, error) {
 func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID) (tpt.Conn, error) {
 	fmt.Println("Call Dial", raddr.String())
 	conf := tor.DialConf{
-		ProxyAddress: PROXY_ADDR,
+		ProxyAddress: t.proxyAddress,
 	}
 
 	dialer, err := t.torConnection.Dialer(ctx, &conf)
@@ -356,13 +371,13 @@ func (t *OnionTransport) Listen(laddr ma.Multiaddr) (tpt.Listener, error) {
 	listenCtx, _ := context.WithTimeout(context.Background(), 3*time.Minute)
 
 	if t.torConnection == nil {
-		return nil, fmt.Errorf("Cannot listen on connection, torConnection is nil. (" + string(port) + ")")
+		return nil, fmt.Errorf("cannot listen on connection, torConnection is nil. (%d)", port)
 	}
 
 	onion, err := t.torConnection.Listen(listenCtx, &tor.ListenConf{Version3: true, NonAnonymous: t.nonAnonymous, RemotePorts: []int{port}})
 
 	if err != nil {
-		return nil, fmt.Errorf("Error listening on torConnection port %d: %s", port, err.Error())
+		return nil, fmt.Errorf("error listening on torConnection port %d: %v", port, err)
 	}
 
 	var _ = onion.ID

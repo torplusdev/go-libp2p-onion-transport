@@ -2,7 +2,9 @@ package oniontransport
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
@@ -17,14 +19,26 @@ func TestCanConnectToOnionService(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	onion, err := NewOnionTransport("", "", "", "", nil, "", nil, true, true)
+	configPath := "/usr/local/etc/tor/torrc"
+	onion, err := NewOnionTransport("", "", configPath, "", nil, "", nil, true, true)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 	var ctx = context.Background()
-	var peerId = peer.ID("Qmc9FmqhnHGNJJNkg89PKFYh9kSNU6KegKqmpizpbF2S2d")
-	onion.Dial(ctx, validAddr, peerId)
-
+	for i := 0; i < 10; i++ {
+		var peerId = peer.ID("Qmc9FmqhnHGNJJNkg89PKFYh9kSNU6KegKqmpizpbF2S2d")
+		connection, err := onion.Dial(ctx, validAddr, peerId)
+		if err != nil {
+			t.Error(err)
+			fmt.Printf("error: %v\n", err)
+			time.Sleep(4 * time.Second)
+			continue
+		}
+		err = connection.Close()
+		if err != nil {
+			t.Error(err)
+		}
+		time.Sleep(4 * time.Second)
+	}
 }
