@@ -109,7 +109,15 @@ var transportInstance *OnionTransport = nil
 // keysDir is the key material for the Tor onion service.
 //
 // if onlyOnion is true the dialer will only be used to dial out on onion addresses
-func NewOnionTransport(torExecutablePath string, torDataDir string, torConfigPath string, controlPass string, auth *proxy.Auth, keysDir string, upgrader *tptu.Upgrader, onlyOnion bool, supportNonAnonymousMode bool) (*OnionTransport, error) {
+func NewOnionTransport(torExecutablePath string,
+	torDataDir string,
+	torConfigPath string,
+	controlPass string,
+	auth *proxy.Auth,
+	keysDir string,
+	upgrader *tptu.Upgrader,
+	onlyOnion bool,
+	supportNonAnonymousMode bool) (*OnionTransport, error) {
 
 	if transportInstance != nil {
 		return transportInstance, nil
@@ -242,13 +250,17 @@ func (t *OnionTransport) onionKeyPath(absPath string) (string, error) {
 
 	err := filepath.Walk(absPath, walkpath)
 	if err != nil {
-		return "", err
+		t.Debugf("walk error")
 	}
 	if onionKeyPath == "" {
-		return "", fmt.Errorf("onion_key file in %v not found", absPath)
+		t.Debugf("onion_key file in %v not found", absPath)
 	}
 	return onionKeyPath, nil
 }
+func (t *OnionTransport) Debugf(format string, args ...interface{}) {
+	fmt.Printf(format+"\n", args...)
+}
+
 func (t *OnionTransport) loadKeys() (map[string]*rsa.PrivateKey, error) {
 	keys := make(map[string]*rsa.PrivateKey)
 	absPath, err := filepath.EvalSymlinks(t.keysDir)
@@ -259,22 +271,25 @@ func (t *OnionTransport) loadKeys() (map[string]*rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("onion key path not found error: %v", err)
 	}
-	key, err := ioutil.ReadFile(keyPath)
-	if err != nil {
-		return nil, err
+	if keyPath != "" {
+		key, err := ioutil.ReadFile(keyPath)
+		if err != nil {
+			return nil, err
+		}
+		file, err := os.Open(keyPath)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+		onionName := strings.Replace(filepath.Base(file.Name()), ".onion_key", "", 1)
+		block, _ := pem.Decode(key)
+		privKey, _, err := pkcs1.DecodePrivateKeyDER(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		keys[onionName] = privKey
 	}
-	file, err := os.Open(keyPath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	onionName := strings.Replace(filepath.Base(file.Name()), ".onion_key", "", 1)
-	block, _ := pem.Decode(key)
-	privKey, _, err := pkcs1.DecodePrivateKeyDER(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-	keys[onionName] = privKey
+
 	return keys, err
 }
 

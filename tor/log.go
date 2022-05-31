@@ -11,6 +11,6 @@ func (t *Tor) DebugEnabled() bool {
 // if present.
 func (t *Tor) Debugf(format string, args ...interface{}) {
 	if w := t.DebugWriter; w != nil {
-		fmt.Fprintf(w, format+"\n", args...)
+		fmt.Printf(format+"\n", args...)
 	}
 }
