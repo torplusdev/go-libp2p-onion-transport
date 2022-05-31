@@ -233,11 +233,9 @@ func (t *OnionTransport) Close() error {
 // loadKeys loads keys into our keys map from files in the keys directory
 func (t *OnionTransport) onionKeyPath(absPath string) (string, error) {
 	onionKeyPath := ""
-	walkpath := func(path string, f os.FileInfo, err error) error {
+	walkpath := func(path string, _ os.FileInfo, _ error) error {
 		if strings.HasSuffix(path, ".onion_key") {
-
 			onionKeyPath = path
-
 		}
 		return nil
 	}
@@ -245,6 +243,9 @@ func (t *OnionTransport) onionKeyPath(absPath string) (string, error) {
 	err := filepath.Walk(absPath, walkpath)
 	if err != nil {
 		return "", err
+	}
+	if onionKeyPath == "" {
+		return "", fmt.Errorf("onion_key file in %v not found", absPath)
 	}
 	return onionKeyPath, nil
 }
@@ -263,10 +264,10 @@ func (t *OnionTransport) loadKeys() (map[string]*rsa.PrivateKey, error) {
 		return nil, err
 	}
 	file, err := os.Open(keyPath)
-	defer file.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer file.Close()
 	onionName := strings.Replace(filepath.Base(file.Name()), ".onion_key", "", 1)
 	block, _ := pem.Decode(key)
 	privKey, _, err := pkcs1.DecodePrivateKeyDER(block.Bytes)
