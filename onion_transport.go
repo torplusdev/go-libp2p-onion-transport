@@ -115,9 +115,7 @@ func NewOnionTransport(torExecutablePath string, torDataDir string, torConfigPat
 		return transportInstance, nil
 	}
 
-	//TODO: Handle defer close
 	logwriter := bufio.NewWriter(os.Stdout)
-	//manet.CodecMap.RegisterToNetAddr()
 	if torDataDir == "" {
 		dirname, err := os.UserHomeDir()
 		if err != nil {
@@ -142,7 +140,6 @@ func NewOnionTransport(torExecutablePath string, torDataDir string, torConfigPat
 		NoHush:            true,
 	}
 
-	//fmt.Println("NewOnionTransport")
 	o := &OnionTransport{
 		ctx:          context.Background(),
 		proxyAddress: fmt.Sprintf("127.0.0.1:%v", sp),
@@ -214,7 +211,6 @@ func (t *OnionTransport) TorDialer(ctx context.Context) (proxy.Dialer, error) {
 	}
 
 	dialer, err := t.torConnection.Dialer(ctx, &conf)
-	//dialer, err := t.controlConn.Dialer(ctx,nil)
 	if err != nil {
 		return nil, err
 	}
@@ -235,35 +231,49 @@ func (t *OnionTransport) Close() error {
 }
 
 // loadKeys loads keys into our keys map from files in the keys directory
+func (t *OnionTransport) onionKeyPath(absPath string) (string, error) {
+	onionKeyPath := ""
+	walkpath := func(path string, f os.FileInfo, err error) error {
+		if strings.HasSuffix(path, ".onion_key") {
+
+			onionKeyPath = path
+
+		}
+		return nil
+	}
+
+	err := filepath.Walk(absPath, walkpath)
+	if err != nil {
+		return "", err
+	}
+	return onionKeyPath, nil
+}
 func (t *OnionTransport) loadKeys() (map[string]*rsa.PrivateKey, error) {
 	keys := make(map[string]*rsa.PrivateKey)
 	absPath, err := filepath.EvalSymlinks(t.keysDir)
 	if err != nil {
 		return nil, err
 	}
-	walkpath := func(path string, f os.FileInfo, err error) error {
-		if strings.HasSuffix(path, ".onion_key") {
-			file, err := os.Open(path)
-			defer file.Close()
-			if err != nil {
-				return err
-			}
-
-			key, err := ioutil.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			onionName := strings.Replace(filepath.Base(file.Name()), ".onion_key", "", 1)
-			block, _ := pem.Decode(key)
-			privKey, _, err := pkcs1.DecodePrivateKeyDER(block.Bytes)
-			if err != nil {
-				return err
-			}
-			keys[onionName] = privKey
-		}
-		return nil
+	keyPath, err := t.onionKeyPath(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("onion key path not found error: %v", err)
 	}
-	err = filepath.Walk(absPath, walkpath)
+	key, err := ioutil.ReadFile(keyPath)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.Open(keyPath)
+	defer file.Close()
+	if err != nil {
+		return nil, err
+	}
+	onionName := strings.Replace(filepath.Base(file.Name()), ".onion_key", "", 1)
+	block, _ := pem.Decode(key)
+	privKey, _, err := pkcs1.DecodePrivateKeyDER(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	keys[onionName] = privKey
 	return keys, err
 }
 
