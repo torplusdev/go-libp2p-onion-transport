@@ -215,7 +215,8 @@ func (t *OnionTransport) createTorConnection() error {
 func (t *OnionTransport) TorDialer(ctx context.Context) (proxy.Dialer, error) {
 
 	conf := tor.DialConf{
-		ProxyAddress: t.proxyAddress,
+		ProxyAddress:      t.proxyAddress,
+		SkipEnableNetwork: true,
 	}
 
 	dialer, err := t.torConnection.Dialer(ctx, &conf)
