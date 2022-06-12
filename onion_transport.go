@@ -311,10 +311,11 @@ func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID
 
 		if errors.As(err, &torError) {
 			if torError.Code == 514 {
+				fmt.Printf("Encountered 514 during tor transport dial (%s), recreating connection...\n", p)
 				t.Close()
 				errCreate := t.createTorConnection()
 				if errCreate != nil {
-					return nil, fmt.Errorf("Error recreating tor connection")
+					return nil, fmt.Errorf("Error recreating tor connection: %s", errCreate.Error())
 				}
 
 				return nil, err
