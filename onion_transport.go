@@ -6,12 +6,16 @@ import (
 	"crypto/rsa"
 	"encoding/base32"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"net/textproto"
 	"path"
 	"runtime"
+	"time"
 
 	"github.com/yawning/bulb/utils/pkcs1"
 
+	"golang.org/x/net/proxy"
 	//"github.com/yawning/bulb"
 	//"github.com/yawning/bulb/utils/pkcs1"
 	"io/ioutil"
@@ -20,16 +24,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
-
-	"golang.org/x/net/proxy"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	tpt "github.com/libp2p/go-libp2p-transport"
 	tptu "github.com/libp2p/go-libp2p-transport-upgrader"
 	ma "github.com/multiformats/go-multiaddr"
+	mafmt "github.com/multiformats/go-multiaddr-fmt"
 	manet "github.com/multiformats/go-multiaddr-net"
-	"github.com/whyrusleeping/mafmt"
 	"paidpiper.com/go-libp2p-onion-transport/tor"
 )
 
@@ -164,6 +165,7 @@ func NewOnionTransport(torExecutablePath string,
 	}
 	o.keys = keys
 	err = o.createTorConnection()
+
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +218,7 @@ func (t *OnionTransport) TorDialer(ctx context.Context) (proxy.Dialer, error) {
 
 	conf := tor.DialConf{
 		ProxyAddress:      t.proxyAddress,
-		SkipEnableNetwork: true,
+		SkipEnableNetwork: false,
 	}
 
 	dialer, err := t.torConnection.Dialer(ctx, &conf)
@@ -305,6 +307,20 @@ func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID
 	dialer, err := t.torConnection.Dialer(ctx, &conf)
 
 	if err != nil {
+		var torError *textproto.Error
+
+		if errors.As(err, &torError) {
+			if torError.Code == 514 {
+				t.Close()
+				errCreate := t.createTorConnection()
+				if errCreate != nil {
+					return nil, fmt.Errorf("Error recreating tor connection")
+				}
+
+				return nil, err
+			}
+		}
+
 		return nil, err
 	}
 
@@ -412,14 +428,14 @@ func (t *OnionTransport) Listen(laddr ma.Multiaddr) (tpt.Listener, error) {
 	listener.listener = onion.LocalListener
 
 	/*// setup bulb listener
-	_, err = pkcs1.OnionAddr(&onionKey.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to derive onion ID: %v", err)
-	}
-	listener.listener, err = t.controlConn.Listener(uint16(port), onionKey)
-	if err != nil {
-		return nil, err
-	}
+	  _, err = pkcs1.OnionAddr(&onionKey.PublicKey)
+	  if err != nil {
+	  	return nil, fmt.Errorf("failed to derive onion ID: %v", err)
+	  }
+	  listener.listener, err = t.controlConn.Listener(uint16(port), onionKey)
+	  if err != nil {
+	  	return nil, err
+	  }
 
 	*/
 	t.laddr = laddr
