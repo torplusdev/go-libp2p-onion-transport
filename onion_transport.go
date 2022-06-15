@@ -301,7 +301,8 @@ func (t *OnionTransport) loadKeys() (map[string]*rsa.PrivateKey, error) {
 func (t *OnionTransport) Dial(ctx context.Context, raddr ma.Multiaddr, p peer.ID) (tpt.Conn, error) {
 	fmt.Println("Call Dial", raddr.String())
 	conf := tor.DialConf{
-		ProxyAddress: t.proxyAddress,
+		ProxyAddress:      t.proxyAddress,
+		SkipEnableNetwork: true,
 	}
 
 	dialer, err := t.torConnection.Dialer(ctx, &conf)
