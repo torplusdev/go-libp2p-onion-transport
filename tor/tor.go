@@ -341,7 +341,10 @@ func (t *Tor) startProcess_NOT_USE_IT(ctx context.Context, conf *StartConf) erro
 		var processCtx context.Context
 		processCtx, t.ProcessCancelFunc = context.WithCancel(ctx)
 		args = append(args, conf.ExtraArgs...)
-		p, err := creator.New(processCtx, args...)
+		var processCtxWithTimeout context.Context
+		processCtxWithTimeout, t.ProcessCancelFunc = context.WithTimeout(processCtx, 60*time.Second)
+
+		p, err := creator.New(processCtxWithTimeout, args...)
 		if err != nil {
 			return err
 		}
@@ -350,7 +353,7 @@ func (t *Tor) startProcess_NOT_USE_IT(ctx context.Context, conf *StartConf) erro
 			t.Debugf("Using embedded control connection")
 			conn, err := p.EmbeddedControlConn()
 			if err != nil {
-				return fmt.Errorf("Unable to get embedded control conn: %v", err)
+				return fmt.Errorf("unable to get embedded control conn: %v", err)
 			}
 			t.Control = control.NewConn(textproto.NewConn(conn))
 			t.Control.DebugWriter = t.DebugWriter
